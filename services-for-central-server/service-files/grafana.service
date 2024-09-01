@@ -1,0 +1,15 @@
+[Unit]
+Description=Grafana Service
+After=network.target
+
+[Service]
+Type=simple
+RemainAfterExit=yes
+WorkingDirectory=~/live-plant-dashboard/sevices-for-central-server/grafana
+User=john
+ExecStart=make up
+ExecStop=make down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

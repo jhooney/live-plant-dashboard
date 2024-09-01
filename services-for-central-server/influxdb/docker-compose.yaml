@@ -1,0 +1,24 @@
+services:
+  influx-db:
+    build:
+      context: .
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb_data:/var/lib/influxdb
+    environment:
+      - INFLUXDB_DB=plantdatabase
+      # - INFLUXDB_ADMIN_USER=plant
+      # - INFLUXDB_ADMIN_PASSWORD=data
+      # - INFLUXDB_HTTP_AUTH_ENABLED=true
+    networks:
+      - plant-iot
+    restart: unless-stopped
+
+volumes:
+  influxdb_data:
+  
+networks:
+  plant-iot:
+    driver: bridge
+    external: true
