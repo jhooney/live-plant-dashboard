@@ -11,12 +11,12 @@ services:
       # - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_BASIC_ENABLED=false
       - GF_INSTALL_PLUGINS=volkovlabs-variable-panel, williamvenner-timepickerbuttons-panel, equansdatahub-tree-panel, speakyourcode-button-panel
-      - GF_SECURITY_ADMIN_USER=hey #super user login
-      - GF_SECURITY_ADMIN_PASSWORD=iloveyou
+      - GF_SECURITY_ADMIN_USER=${USER} #super user login
+      - GF_SECURITY_ADMIN_PASSWORD=${PASS}
       # - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/Main_View.json
       - GF_PANELS_DISABLE_SANITIZE_HTML=true #allows scripting in text panels
     ports: 
-      - "3000:3000"
+      - "${PORT}:3000"
     networks:
       - plant-iot
     volumes:
