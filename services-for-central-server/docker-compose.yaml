@@ -19,10 +19,11 @@ services:
       - "1880:1880"
     volumes:
       - node-red-data:/data
+      - ./node-red-build/flows.json:/data/flows.json
 
   influx-db:
     build:
-      context: .
+      context: influx-db
     ports:
       - "8086:8086"
     volumes:
@@ -32,8 +33,6 @@ services:
       # - INFLUXDB_ADMIN_USER=plant
       # - INFLUXDB_ADMIN_PASSWORD=data
       # - INFLUXDB_HTTP_AUTH_ENABLED=true
-    networks:
-      - plant-iot
     restart: unless-stopped
 
   grafana:
@@ -54,8 +53,6 @@ services:
       - GF_PANELS_DISABLE_SANITIZE_HTML=true #allows scripting in text panels
     ports: 
       - "${PORT}:3000"
-    networks:
-      - plant-iot
     volumes:
       - grafana-data:/var/lib/grafana
       # - ./img/fav32.png:/usr/share/grafana/public/img/fav32.png:ro
