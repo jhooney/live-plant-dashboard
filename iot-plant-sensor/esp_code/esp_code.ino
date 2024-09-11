@@ -16,7 +16,7 @@
 
 const char* ssid = WIFI_SSID;        // Replace with your network SSID
 const char* password = WIFI_PASS;  // Replace with your network password
-const char* mqtt_server = SERVER_NAME;  // Replace with your Raspberry Pi IP address
+const char* mqtt_server = ROBINSERVER_IP;  // Replace with your Raspberry Pi IP address
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -93,9 +93,9 @@ void loop() {
   // Read data from the RS232 device
   if (Serial1.available()) {
     String dataFromRS232 = Serial1.readString();
-    Serial.print("Received from RS232: ");
+    Serial.print("Received from RS232:");
     Serial.println(dataFromRS232);
-
+  
     // Parse the received JSON
     StaticJsonDocument<200> doc;  // Adjust the size as needed
     DeserializationError error = deserializeJson(doc, dataFromRS232);
@@ -114,7 +114,13 @@ void loop() {
       // Publish the modified JSON over MQTT
       client.publish("plant_monitor/data", modifiedJson.c_str());
       Serial.println("Published JSON to MQTT.");
+//don't know why this isn't working, leaving for the time being as I'm pressed for time
+//    } else if (dataFromRS232.equals("OK")){
+//      Serial.print("Turning LED off");
+//      Serial1.print("l");
     } else {
+      Serial.println("Turning LED off");
+      Serial1.print("l");
       Serial.print("Failed to parse JSON:");
       Serial.print(dataFromRS232);
     }
