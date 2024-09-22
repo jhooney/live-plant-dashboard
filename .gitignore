@@ -1,2 +1,3 @@
-secrets.h
+testing-secrets.h
+production-secrets.h
 .env

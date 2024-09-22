@@ -5,81 +5,100 @@
  * Reporting data over WiFi to Raspberry Pi via MQTT
  */
 
-#include <WiFi.h>
-#include <PubSubClient.h>
-#include <ArduinoJson.h>  // Include the ArduinoJson library
-#include <secrets.h>
+#include <WiFiMulti.h>
+WiFiMulti wifiMulti;
+#include <ArduinoJson.h>
+#include <production-secrets.h>
+//#include <testing-secrets.h>
+#include <InfluxDbClient.h>
+#include <InfluxDbCloud.h>
 
 #define RX_PIN D7 //in
 #define TX_PIN D6 //out
-#define DEVICE_ID 1
+#define DEVICE_ID "2" //Change per device
 
-const char* ssid = WIFI_SSID;        // Replace with your network SSID
-const char* password = WIFI_PASS;  // Replace with your network password
-const char* mqtt_server = ROBINSERVER_IP;  // Replace with your Raspberry Pi IP address
+#define WIRED_MODE false //cannot use Serial in battery mode so need to disable
 
-WiFiClient espClient;
-PubSubClient client(espClient);
+// Time zone info
+#define TZ_INFO "UTC-5"
+
+// Declare InfluxDB client instance with preconfigured InfluxCloud certificate
+InfluxDBClient client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUXDB_TOKEN, InfluxDbCloud2CACert);
+
+Point sensor("plant_monitors");
 
 unsigned long previousMillis = 0;   // Stores the last time 'j' was sent
 const long interval = 60000;        // Interval at which to send 'j' (60 seconds)
 
+String influx_writing_values; //used to track influx db communication
+bool influx_write_status;
+
 void setup_wifi() {
-  delay(10);
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
+  WiFi.mode(WIFI_STA);
+  wifiMulti.addAP(WIFI_SSID, WIFI_PASS);
 
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+  if(WIRED_MODE){
+    Serial.println();
+    Serial.print("Connecting to ");
+    Serial.println(WIFI_SSID);
+  }
+  
+  while (wifiMulti.run() != WL_CONNECTED) {
+    if(WIRED_MODE){
+      Serial.print(".");
+    }
+    delay(100);
   }
 
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-}
-
-void reconnect() {
-  // Loop until we're reconnected
-  while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    // Attempt to connect
-    if (client.connect("XIAOESP32C3Client")) {
-      Serial.println("connected");
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
-      delay(5000);
-    }
+  if(WIRED_MODE){
+    Serial.println("");
+    Serial.println("WiFi connected");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
   }
 }
 
 void setup() {
-  // Initialize Serial Monitor
-  Serial.begin(115200);
-  while (!Serial) {
-    ; // Wait for the serial port to connect. Needed for native USB port only.
+  if(WIRED_MODE){
+    // Initialize Serial Monitor
+    Serial.begin(115200);
   }
 
   setup_wifi();
-  client.setServer(mqtt_server, 1883);
+  
+  // Accurate time is necessary for certificate validation and writing in batches
+  // We use the NTP servers in your area as provided by: https://www.pool.ntp.org/zone/
+  // Syncing progress and the time will be printed to Serial.
+  timeSync(TZ_INFO, "pool.ntp.org", "time.nis.gov");
+
+  if(WIRED_MODE){
+    // Check server connection
+    if (client.validateConnection()) {
+      Serial.print("Connected to InfluxDB: ");
+      Serial.println(client.getServerUrl());
+    } else {
+      Serial.print("InfluxDB connection failed: ");
+      Serial.println(client.getLastErrorMessage());
+    }
+  }
+    
+  // Add tags to the data point
+  sensor.addTag("device", DEVICE_ID);
+  sensor.addTag("SSID", WiFi.SSID());
 
   // Initialize Serial1 (UART) for RS232 communication
   Serial1.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
-  Serial.println("Serial communication with RS232 device started.");
+  if(WIRED_MODE){Serial.println("Serial communication with RS232 device started.");}
 }
 
 void loop() {
-  if (!client.connected()) {
-    reconnect();
+  // Ensure the InfluxDB client is still connected
+  if (wifiMulti.run() != WL_CONNECTED) {
+    setup_wifi(); // Reconnect to WiFi if disconnected
   }
-  client.loop();
+  
+  // Clear fields for reusing the point. Tags will remain the same as set above.
+  sensor.clearFields();
 
   unsigned long currentMillis = millis();
 
@@ -87,14 +106,16 @@ void loop() {
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
     Serial1.print('j');
-    Serial.println("Sent 'j' to RS232 device.");
+    if(WIRED_MODE){Serial.println("Sent 'j' to RS232 device.");}
   }
 
   // Read data from the RS232 device
   if (Serial1.available()) {
     String dataFromRS232 = Serial1.readString();
-    Serial.print("Received from RS232:");
-    Serial.println(dataFromRS232);
+    if(WIRED_MODE){
+      Serial.print("Received from RS232: ");
+      Serial.println(dataFromRS232);
+    }
   
     // Parse the received JSON
     StaticJsonDocument<200> doc;  // Adjust the size as needed
@@ -104,33 +125,54 @@ void loop() {
       // Add the device_id field
       doc["device_id"] = DEVICE_ID;
 
-      // Convert the updated JSON back to a string
-      String modifiedJson;
-      serializeJson(doc, modifiedJson);
+      // Extract sensor data from the JSON
+      float wetness = doc["wetness"];
+      float humidity = doc["humidity"];
+      float temp = doc["temp"];
 
-      Serial.print("Modified JSON: ");
-      Serial.println(modifiedJson);
+      // Add tags and fields
+      sensor.clearFields();
+      sensor.addField("wetness", wetness);
+      sensor.addField("humidity", humidity);
+      sensor.addField("temperature", temp);
+      sensor.addField("signal_strength", WiFi.RSSI());
 
-      // Publish the modified JSON over MQTT
-      client.publish("plant_monitor/data", modifiedJson.c_str());
-      Serial.println("Published JSON to MQTT.");
-//don't know why this isn't working, leaving for the time being as I'm pressed for time
-//    } else if (dataFromRS232.equals("OK")){
-//      Serial.print("Turning LED off");
-//      Serial1.print("l");
+      influx_writing_values = sensor.toLineProtocol();
+      if(WIRED_MODE){
+        // Print what are we exactly writing
+        Serial.print("Writing: ");
+        Serial.println(influx_writing_values);
+      }
+
+      influx_write_status = client.writePoint(sensor);
+
+      if(WIRED_MODE){
+        // Write the point to InfluxDB
+        if (influx_write_status) {
+          Serial.println("Data written to InfluxDB successfully.");
+        } else {
+          Serial.print("InfluxDB write failed: ");
+          Serial.println(client.getLastErrorMessage());
+        }
+      }
+
     } else {
-      Serial.println("Turning LED off");
+      if(WIRED_MODE){Serial.println("Turning LED off");}
       Serial1.print("l");
-      Serial.print("Failed to parse JSON:");
-      Serial.print(dataFromRS232);
+      if(WIRED_MODE){
+        Serial.print("Failed to parse JSON: ");
+        Serial.println(dataFromRS232);
+      }
     }
   }
 
-  // If data is available on the Serial Monitor, send it to the RS232 device
-  if (Serial.available()) {
-    String dataToRS232 = Serial.readString();
-    Serial1.print(dataToRS232);
-    Serial.print("Sent to RS232: ");
-    Serial.println(dataToRS232);
+  if(WIRED_MODE){
+    // If data is available on the Serial Monitor, send it to the RS232 device
+    if (Serial.available()) {
+      String dataToRS232 = Serial.readString();
+      Serial1.print(dataToRS232);
+      Serial.print("Sent to RS232: ");
+      Serial.println(dataToRS232);
+    }
   }
 }

@@ -1,26 +1,4 @@
 services:
-  mosquitto:
-    image: eclipse-mosquitto:latest
-    container_name: mosquitto-broker
-    ports:
-      - "1883:1883"   # MQTT Port
-      # - "9001:9001"   # WebSocket Port (optional)
-    volumes:
-      - ./mosquitto/config:/mosquitto/config    # Mount the configuration directory
-      - ./mosquitto/data:/mosquitto/data        # Mount the data directory
-      - ./mosquitto/log:/mosquitto/log          # Mount the log directory
-    restart: unless-stopped
-
-  node-red:
-    image: nodered/node-red:latest
-    environment:
-      - TZ=Europe/Amsterdam
-    ports:
-      - "1880:1880"
-    volumes:
-      - node-red-data:/data
-      - ./node-red-build/flows.json:/data/flows.json
-
   influx-db:
     build:
       context: influx-db
@@ -30,9 +8,9 @@ services:
       - influxdb_data:/var/lib/influxdb
     environment:
       - INFLUXDB_DB=plantdatabase
-      # - INFLUXDB_ADMIN_USER=plant
-      # - INFLUXDB_ADMIN_PASSWORD=data
-      # - INFLUXDB_HTTP_AUTH_ENABLED=true
+      - INFLUXDB_ADMIN_USER=plant
+      - INFLUXDB_ADMIN_PASSWORD=data
+      - INFLUXDB_HTTP_AUTH_ENABLED=true
     restart: unless-stopped
 
   grafana:
@@ -46,22 +24,17 @@ services:
       - GF_FEATURE_TOGGLES_DATACONNECTIONSCONSOLE=false
       # - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_BASIC_ENABLED=false
-      - GF_INSTALL_PLUGINS=volkovlabs-variable-panel, williamvenner-timepickerbuttons-panel, equansdatahub-tree-panel, speakyourcode-button-panel
-      - GF_SECURITY_ADMIN_USER=${USER} #super user login
-      - GF_SECURITY_ADMIN_PASSWORD=${PASS}
-      # - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/Main_View.json
+      - GF_INSTALL_PLUGINS=volkovlabs-variable-panel, williamvenner-timepickerbuttons-panel, speakyourcode-button-panel
+      # - GF_SECURITY_ADMIN_USER=${USER} #super user login
+      # - GF_SECURITY_ADMIN_PASSWORD=${PASS}
       - GF_PANELS_DISABLE_SANITIZE_HTML=true #allows scripting in text panels
-    ports: 
-      - "${PORT}:3000"
+    ports:
+     - 3010:3000
     volumes:
       - grafana-data:/var/lib/grafana
-      # - ./img/fav32.png:/usr/share/grafana/public/img/fav32.png:ro
-      # - ./img/fav32.png:/usr/share/grafana/public/img/apple-touch-icon.png:ro
-      # - ./img/grafana_icon.svg:/usr/share/grafana/public/img/grafana_icon.svg:ro
       # - ./provisioning:/etc/grafana/provisioning:rw
     restart: unless-stopped
 
 volumes:
-  node-red-data:
   influxdb_data:
   grafana-data:
