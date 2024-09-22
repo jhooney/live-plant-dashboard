@@ -4,8 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-RemainAfterExit=yes
-WorkingDirectory=/live-plant-dashboard/sevices-for-central-server/
+User=john
+Group=docker
+WorkingDirectory=/home/john/live-plant-dashboard/services-for-central-server
 ExecStart=make up
 ExecStop=make down
 TimeoutStartSec=0
