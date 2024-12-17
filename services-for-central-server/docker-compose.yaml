@@ -22,17 +22,15 @@ services:
       - GF_ALERTING_ENABLED=false
       - GF_UNIFIED_ALERTING_ENABLED=false
       - GF_FEATURE_TOGGLES_DATACONNECTIONSCONSOLE=false
-      # - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_BASIC_ENABLED=false
-      - GF_INSTALL_PLUGINS=volkovlabs-variable-panel, williamvenner-timepickerbuttons-panel, speakyourcode-button-panel
-      # - GF_SECURITY_ADMIN_USER=${USER} #super user login
-      # - GF_SECURITY_ADMIN_PASSWORD=${PASS}
+      # - GF_SECURITY_ADMIN_USER=admin #login creds
+      # - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_PANELS_DISABLE_SANITIZE_HTML=true #allows scripting in text panels
     ports:
      - 3010:3000
     volumes:
       - grafana-data:/var/lib/grafana
-      # - ./provisioning:/etc/grafana/provisioning:rw
+      - ./provisioning:/etc/grafana/provisioning:rw
     restart: unless-stopped
 
 volumes:

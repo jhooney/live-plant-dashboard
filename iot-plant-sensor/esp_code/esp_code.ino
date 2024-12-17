@@ -15,9 +15,9 @@ WiFiMulti wifiMulti;
 
 #define RX_PIN D7 //in
 #define TX_PIN D6 //out
-#define DEVICE_ID "2" //Change per device
+#define DEVICE_ID "4" //CHANGE PER DEVICE
 
-#define WIRED_MODE false //cannot use Serial in battery mode so need to disable
+#define WIRED_MODE false //cannot use Serial in battery mode on this board so need to disable
 
 // Time zone info
 #define TZ_INFO "UTC-5"
@@ -29,6 +29,8 @@ Point sensor("plant_monitors");
 
 unsigned long previousMillis = 0;   // Stores the last time 'j' was sent
 const long interval = 60000;        // Interval at which to send 'j' (60 seconds)
+unsigned long timeSinceTimeReset = 0; // Stores last time reset time interval
+const long resync_time_interval = 600000;        // Interval at which to send 'j' (10 minutes)
 
 String influx_writing_values; //used to track influx db communication
 bool influx_write_status;
@@ -56,6 +58,11 @@ void setup_wifi() {
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
   }
+}
+
+void turn_led_off() {
+    if(WIRED_MODE){Serial.println("Turning LED off");}
+    Serial1.print("l");
 }
 
 void setup() {
@@ -102,6 +109,13 @@ void loop() {
 
   unsigned long currentMillis = millis();
 
+  // Check if it's time to resync time value
+  if (currentMillis - timeSinceTimeReset >= resync_time_interval) {
+    if(WIRED_MODE){Serial.println("resyncing time value");}
+    timeSync(TZ_INFO, "pool.ntp.org", "time.nis.gov"); //re-sync time
+    timeSinceTimeReset = currentMillis;
+  }
+  
   // Check if it's time to send 'j'
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
@@ -121,6 +135,8 @@ void loop() {
     StaticJsonDocument<200> doc;  // Adjust the size as needed
     DeserializationError error = deserializeJson(doc, dataFromRS232);
 
+    turn_led_off();
+    
     if (!error) {
       // Add the device_id field
       doc["device_id"] = DEVICE_ID;
@@ -155,10 +171,7 @@ void loop() {
           Serial.println(client.getLastErrorMessage());
         }
       }
-
     } else {
-      if(WIRED_MODE){Serial.println("Turning LED off");}
-      Serial1.print("l");
       if(WIRED_MODE){
         Serial.print("Failed to parse JSON: ");
         Serial.println(dataFromRS232);
